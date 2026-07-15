@@ -95,7 +95,7 @@ export default function App() {
 
     setTranslationLoading(true);
     try {
-      const { translations } = await translateLines(
+      const { translations, warning } = await translateLines(
         selectedSong.lines.map((l) => l.text),
         lang,
       );
@@ -103,6 +103,7 @@ export default function App() {
         ...prev,
         [selectedSong.id]: { ...(prev[selectedSong.id] || {}), [lang]: translations },
       }));
+      if (warning) setTranslationError(warning);
     } catch (err) {
       setTranslationError(err.message || "Translation failed.");
     } finally {
@@ -118,8 +119,27 @@ export default function App() {
   return (
     <div className="app">
       <header className="app__header">
-        <h1>BabelBeat</h1>
+        <div className="app__brand">
+          <span className="app__brand-mark">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M9 18V5l10-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm10-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                stroke="white"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <h1>BabelBeat</h1>
+          <span className="app__tagline">— sing along in any language</span>
+        </div>
+
         <form className="app__url-form" onSubmit={handleLoadVideo}>
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+            <path d="m21 21-4.3-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
           <input
             type="text"
             value={urlInput}
@@ -127,7 +147,8 @@ export default function App() {
             placeholder="Paste a YouTube URL"
           />
           <button type="submit" disabled={loadingVideoInfo}>
-            {loadingVideoInfo ? "Loading…" : "Load"}
+            {loadingVideoInfo && <span className="spinner" aria-hidden="true" />}
+            {loadingVideoInfo ? "Loading" : "Load"}
           </button>
         </form>
         {urlError && <p className="app__error">{urlError}</p>}
@@ -138,7 +159,13 @@ export default function App() {
           {videoId ? (
             <YouTubePlayer videoId={videoId} onTimeUpdate={setCurrentTime} />
           ) : (
-            <div className="app__player-placeholder">Paste a YouTube URL above to get started</div>
+            <div className="app__player-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="4" width="20" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M10 9.5v5l4.5-2.5-4.5-2.5Z" fill="currentColor" />
+              </svg>
+              <span>Paste a YouTube URL above to get started</span>
+            </div>
           )}
         </div>
 
@@ -174,7 +201,10 @@ export default function App() {
             <div className="lyrics-panel lyrics-panel--empty">
               <h2>Lyrics</h2>
               {lyricsLoading || loadingVideoInfo ? (
-                <p>Searching for lyrics…</p>
+                <p className="app__loading-state">
+                  <span className="spinner" aria-hidden="true" />
+                  Searching for lyrics…
+                </p>
               ) : (
                 <LyricsSearchForm
                   initialTrack={videoInfo?.guessedTrack}
@@ -198,7 +228,7 @@ export default function App() {
       </main>
 
       <footer className="app__footer">
-        <p>Lyrics via lrclib.net · translations via MyMemory</p>
+        <p>Lyrics via lrclib.net · translations via Google Translate</p>
       </footer>
     </div>
   );

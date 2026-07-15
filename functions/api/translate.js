@@ -1,9 +1,16 @@
 // POST /api/translate  { lines: string[], target: "es", source?: "en" }
-// Proxies MyMemory's translation API line-by-line (small parallel batches)
-// so the frontend never has to talk to a third-party API directly.
+// Proxies Google Translate's public (unofficial, key-free) endpoint —
+// the same one used by countless browser extensions and CLI tools — so
+// the frontend never has to talk to a third-party API directly.
+//
+// We started on MyMemory's free API, but its anonymous quota is tracked
+// per IP, and Cloudflare Workers share egress IPs across every project on
+// the platform — so unrelated traffic exhausted our daily limit almost
+// immediately. Google's `translate_a/single` endpoint has no such shared
+// per-IP bottleneck at our volume and needs no account, key, or email.
 
 const CONCURRENCY = 8;
-const MAX_CHARS_PER_LINE = 480; // MyMemory's anonymous-tier request limit is ~500 bytes
+const MAX_CHARS_PER_LINE = 1800;
 
 export async function onRequestPost({ request }) {
   let body;
@@ -22,24 +29,28 @@ export async function onRequestPost({ request }) {
     return json({ error: "Missing target language" }, 400);
   }
 
-  const langpair = `${source}|${target}`;
-
   try {
-    const translations = await translateInBatches(lines, langpair);
-    return json({ translations });
+    const results = await translateInBatches(lines, source, target);
+    const translations = results.map((r) => r.text);
+    const anyFailed = results.some((r) => !r.ok);
+
+    return json({
+      translations,
+      warning: anyFailed ? "Some lines could not be translated." : undefined,
+    });
   } catch (err) {
     return json({ error: "Translation failed" }, 502);
   }
 }
 
-async function translateInBatches(lines, langpair) {
+async function translateInBatches(lines, source, target) {
   const results = new Array(lines.length);
   let cursor = 0;
 
   async function worker() {
     while (cursor < lines.length) {
       const i = cursor++;
-      results[i] = await translateLine(lines[i], langpair);
+      results[i] = await translateLine(lines[i], source, target);
     }
   }
 
@@ -48,23 +59,32 @@ async function translateInBatches(lines, langpair) {
   return results;
 }
 
-async function translateLine(text, langpair) {
-  if (!text || !text.trim()) return "";
+async function translateLine(text, source, target) {
+  if (!text || !text.trim()) return { text: "", ok: true };
 
   const params = new URLSearchParams({
+    client: "gtx",
+    sl: source,
+    tl: target,
+    dt: "t",
     q: text.slice(0, MAX_CHARS_PER_LINE),
-    langpair,
   });
 
   try {
-    const res = await fetch(`https://api.mymemory.translated.net/get?${params.toString()}`, {
-      headers: { "User-Agent": "BabelBeat/1.0 (+https://babelbeat.pages.dev)" },
+    const res = await fetch(`https://translate.googleapis.com/translate_a/single?${params.toString()}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (BabelBeat/1.0; +https://babelbeat.pages.dev)" },
     });
-    if (!res.ok) return text;
+    if (!res.ok) return { text, ok: false };
+
     const data = await res.json();
-    return data?.responseData?.translatedText || text;
+    // Response shape: [[[translatedChunk, originalChunk, ...], ...], ...]
+    const segments = Array.isArray(data?.[0]) ? data[0] : null;
+    const translated = segments?.map((seg) => seg?.[0] ?? "").join("");
+
+    if (!translated) return { text, ok: false };
+    return { text: translated, ok: true };
   } catch {
-    return text;
+    return { text, ok: false };
   }
 }
 

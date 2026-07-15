@@ -40,7 +40,8 @@ export default function LyricsSearchForm({
           placeholder="Artist (optional)"
         />
         <button type="submit" disabled={loading}>
-          {loading ? "Searching…" : "Search lyrics"}
+          {loading && <span className="spinner" aria-hidden="true" />}
+          {loading ? "Searching" : "Search lyrics"}
         </button>
       </form>
 

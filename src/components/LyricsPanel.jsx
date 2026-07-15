@@ -29,11 +29,7 @@ export default function LyricsPanel({
         <div>
           <h2>{song.title}</h2>
           <p className="lyrics-panel__artist">{song.artist}</p>
-          {!song.synced && (
-            <p className="lyrics-panel__unsynced-note">
-              These lyrics aren't time-synced — showing full text.
-            </p>
-          )}
+          {!song.synced && <span className="lyrics-panel__unsynced-note">not time-synced</span>}
         </div>
         <label className="lyrics-panel__lang-select">
           Translate to
@@ -48,7 +44,11 @@ export default function LyricsPanel({
         </label>
       </div>
 
-      {translationError && <p className="lyrics-panel__translation-error">{translationError}</p>}
+      {translationError && (
+        <p className="lyrics-panel__translation-error">
+          <span>⚠</span> {translationError}
+        </p>
+      )}
 
       <div className="lyrics-panel__list" ref={listRef}>
         {song.lines.map((line, index) => {
