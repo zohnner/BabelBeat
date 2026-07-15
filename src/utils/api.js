@@ -23,12 +23,22 @@ export async function searchLyrics(track, artist) {
   return handleJson(res);
 }
 
-export async function translateLines(lines, target, source = "en", { romanize = false } = {}) {
+// source defaults to "auto" so we never assume a song's lyrics are in any
+// particular language — Google detects it from the text itself.
+export async function translateLines(lines, target, source = "auto", { romanize = false } = {}) {
   const res = await fetch("/api/translate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ lines, target, source, romanize }),
   });
+  return handleJson(res);
+}
+
+// Detects what language a snippet of text is written in (used to figure out
+// a song's actual source language, e.g. so a Spanish-language song isn't
+// silently assumed to be English).
+export async function detectLanguage(text) {
+  const res = await fetch(`/api/detect-language?text=${encodeURIComponent(text)}`);
   return handleJson(res);
 }
 

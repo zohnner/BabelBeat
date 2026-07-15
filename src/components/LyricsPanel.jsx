@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { supportedLanguages, originalLanguageOption, isRomanizable } from "../data/languages";
+import { languageDisplayName } from "../data/languageNames";
 
 /**
  * Displays the lyric line list, highlighting whichever line is active for
@@ -11,6 +12,7 @@ export default function LyricsPanel({
   song,
   currentTime,
   language,
+  sourceLanguage,
   onLanguageChange,
   translatedLines,
   translationLoading,
@@ -34,6 +36,15 @@ export default function LyricsPanel({
 
   const canRomanize = isRomanizable(language);
 
+  // Label the "original" option with whatever language we detected the
+  // lyrics to actually be in, and don't offer to "translate" into that same
+  // language — it's already there.
+  const detectedName = sourceLanguage ? languageDisplayName(sourceLanguage) : null;
+  const originalLabel = detectedName
+    ? `Original (${detectedName})`
+    : originalLanguageOption.label;
+  const targetLanguages = supportedLanguages.filter((lang) => lang.code !== sourceLanguage);
+
   return (
     <div className="lyrics-panel">
       <div className="lyrics-panel__header">
@@ -55,8 +66,8 @@ export default function LyricsPanel({
           <label className="lyrics-panel__lang-select">
             Translate to
             <select value={language} onChange={(e) => onLanguageChange(e.target.value)}>
-              <option value={originalLanguageOption.code}>{originalLanguageOption.label}</option>
-              {supportedLanguages.map((lang) => (
+              <option value={originalLanguageOption.code}>{originalLabel}</option>
+              {targetLanguages.map((lang) => (
                 <option key={lang.code} value={lang.code}>
                   {lang.label}
                 </option>

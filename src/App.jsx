@@ -6,7 +6,13 @@ import ShareCard from "./components/ShareCard";
 import { exampleVideoUrl } from "./data/mockLyrics";
 import { originalLanguageOption, isRomanizable } from "./data/languages";
 import { extractVideoId } from "./utils/youtube";
-import { fetchVideoInfo, searchLyrics, translateLines, thumbnailProxyUrl } from "./utils/api";
+import {
+  fetchVideoInfo,
+  searchLyrics,
+  translateLines,
+  detectLanguage,
+  thumbnailProxyUrl,
+} from "./utils/api";
 import { extractAccentColors } from "./utils/color";
 import "./App.css";
 
@@ -24,6 +30,10 @@ export default function App() {
   const [selectedSong, setSelectedSong] = useState(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [lyricsError, setLyricsError] = useState(null);
+
+  // What language the song's lyrics are actually written in, auto-detected
+  // from the lyrics text itself (never assumed) — see the effect below.
+  const [sourceLanguage, setSourceLanguage] = useState(null);
 
   const [language, setLanguage] = useState(originalLanguageOption.code);
   const [translationsCache, setTranslationsCache] = useState({}); // { [songId]: { [lang]: string[] } }
@@ -50,6 +60,39 @@ export default function App() {
     };
   }, [videoInfo?.thumbnail]);
 
+  // Detect what language the lyrics are actually in as soon as a song is
+  // selected, using a sample of the lyric text — never assume English.
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedSong) {
+      setSourceLanguage(null);
+      return;
+    }
+    const sample = selectedSong.lines
+      .map((l) => l.text)
+      .filter(Boolean)
+      .slice(0, 4)
+      .join(" ")
+      .slice(0, 400);
+
+    if (!sample.trim()) {
+      setSourceLanguage(null);
+      return;
+    }
+
+    detectLanguage(sample)
+      .then(({ language: detected }) => {
+        if (!cancelled) setSourceLanguage(detected || null);
+      })
+      .catch(() => {
+        if (!cancelled) setSourceLanguage(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSong]);
+
   async function handleLoadVideo(e) {
     e.preventDefault();
     const id = extractVideoId(urlInput);
@@ -64,6 +107,7 @@ export default function App() {
     setVideoInfo(null);
     setCandidates(null);
     setSelectedSong(null);
+    setSourceLanguage(null);
     setLanguage(originalLanguageOption.code);
     setTranslationsCache({});
     setRomanizationsCache({});
@@ -131,10 +175,13 @@ export default function App() {
 
     setTranslationLoading(true);
     try {
+      // Use the detected source language rather than assuming the lyrics
+      // are English — falls back to Google's own auto-detect if we somehow
+      // don't have one yet.
       const { translations, romanizations, warning } = await translateLines(
         selectedSong.lines.map((l) => l.text),
         lang,
-        "en",
+        sourceLanguage || "auto",
         { romanize },
       );
       setTranslationsCache((prev) => ({
@@ -250,6 +297,7 @@ export default function App() {
                 song={selectedSong}
                 currentTime={currentTime}
                 language={language}
+                sourceLanguage={sourceLanguage}
                 onLanguageChange={handleLanguageChange}
                 translatedLines={translatedLines}
                 translationLoading={translationLoading}

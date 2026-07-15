@@ -44,16 +44,26 @@ export async function onRequestGet({ request }) {
 }
 
 function guessTrackArtist(title, author) {
-  const clean = (title || "")
+  let clean = (title || "")
     // Strip any parenthesized/bracketed qualifier entirely — video titles
-    // pack all kinds of tags in there (Official Video, 4K Remaster, Lyrics,
-    // HD, Audio, Clean, etc.) and none of them belong in a lyrics search.
+    // pack all kinds of tags in there (Official Video, Video Oficial, 4K
+    // Remaster, Lyrics, HD, Audio, Clean, etc.) and none of them belong in
+    // a lyrics search.
     .replace(/\([^)]*\)/g, "")
     .replace(/\[[^\]]*\]/g, "")
     .replace(/official (music )?video/gi, "")
+    .replace(/(v[ií]deo|audio) oficial/gi, "")
     .replace(/lyrics?( video)?/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+    .replace(/letra/gi, "")
+    .replace(/visualizer/gi, "");
+
+  // Uploaders often tack extra metadata after a "|" or "•" separator —
+  // usually the album name or promo text, e.g. "Artist - Track | Album
+  // Name". That trailing chunk isn't part of the song title and corrupts
+  // the lyrics search query, so keep only what's before the first one.
+  clean = clean.split(/[|•]/)[0];
+
+  clean = clean.replace(/\s{2,}/g, " ").trim();
 
   const dashSplit = clean.split(/\s[-–—]\s/);
   if (dashSplit.length >= 2) {
