@@ -95,7 +95,7 @@ export default function App() {
 
     setTranslationLoading(true);
     try {
-      const { translations } = await translateLines(
+      const { translations, warning } = await translateLines(
         selectedSong.lines.map((l) => l.text),
         lang,
       );
@@ -103,6 +103,7 @@ export default function App() {
         ...prev,
         [selectedSong.id]: { ...(prev[selectedSong.id] || {}), [lang]: translations },
       }));
+      if (warning) setTranslationError(warning);
     } catch (err) {
       setTranslationError(err.message || "Translation failed.");
     } finally {
@@ -198,7 +199,7 @@ export default function App() {
       </main>
 
       <footer className="app__footer">
-        <p>Lyrics via lrclib.net · translations via MyMemory</p>
+        <p>Lyrics via lrclib.net · translations via Google Translate</p>
       </footer>
     </div>
   );
