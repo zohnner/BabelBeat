@@ -1,9 +1,33 @@
 // POST /api/translate  { lines: string[], target: "es", source?: "en" }
 // Proxies MyMemory's translation API line-by-line (small parallel batches)
 // so the frontend never has to talk to a third-party API directly.
+//
+// GET /api/translate?q=<text>&target=<lang>  — debug helper, returns the
+// raw MyMemory response so translation issues are easy to diagnose from
+// outside the Worker sandbox.
 
 const CONCURRENCY = 8;
 const MAX_CHARS_PER_LINE = 480; // MyMemory's anonymous-tier request limit is ~500 bytes
+
+export async function onRequestGet({ request }) {
+  const { searchParams } = new URL(request.url);
+  const q = searchParams.get("q");
+  const target = searchParams.get("target") || "es";
+  if (!q) return json({ error: "Missing q parameter" }, 400);
+
+  const params = new URLSearchParams({ q, langpair: `en|${target}` });
+  const upstreamUrl = `https://api.mymemory.translated.net/get?${params.toString()}`;
+
+  try {
+    const res = await fetch(upstreamUrl, {
+      headers: { "User-Agent": "BabelBeat/1.0 (+https://babelbeat.pages.dev)" },
+    });
+    const text = await res.text();
+    return json({ upstreamStatus: res.status, upstreamOk: res.ok, upstreamBody: text.slice(0, 1000) });
+  } catch (err) {
+    return json({ error: "fetch threw", message: String(err), stack: err?.stack });
+  }
+}
 
 export async function onRequestPost({ request }) {
   let body;
