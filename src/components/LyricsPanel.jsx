@@ -1,17 +1,27 @@
-import { supportedLanguages } from "../data/mockLyrics";
+import { useEffect, useRef } from "react";
+import { supportedLanguages, originalLanguageOption } from "../data/languages";
 
 /**
- * Displays the synced lyric line (original + translation) and lets the
- * user pick a target language. Also renders the full scrolling lyric list
- * with the active line highlighted.
+ * Displays the lyric line list, highlighting whichever line is active for
+ * synced songs, showing a translated line underneath once one is available.
  */
 export default function LyricsPanel({
   song,
   currentTime,
   language,
   onLanguageChange,
+  translatedLines,
+  translationLoading,
+  translationError,
 }) {
-  const activeIndex = getActiveLineIndex(song.lines, currentTime);
+  const listRef = useRef(null);
+  const activeLineRef = useRef(null);
+
+  const activeIndex = song.synced ? getActiveLineIndex(song.lines, currentTime) : -1;
+
+  useEffect(() => {
+    activeLineRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeIndex]);
 
   return (
     <div className="lyrics-panel">
@@ -19,13 +29,16 @@ export default function LyricsPanel({
         <div>
           <h2>{song.title}</h2>
           <p className="lyrics-panel__artist">{song.artist}</p>
+          {!song.synced && (
+            <p className="lyrics-panel__unsynced-note">
+              These lyrics aren't time-synced — showing full text.
+            </p>
+          )}
         </div>
         <label className="lyrics-panel__lang-select">
           Translate to
-          <select
-            value={language}
-            onChange={(e) => onLanguageChange(e.target.value)}
-          >
+          <select value={language} onChange={(e) => onLanguageChange(e.target.value)}>
+            <option value={originalLanguageOption.code}>{originalLanguageOption.label}</option>
             {supportedLanguages.map((lang) => (
               <option key={lang.code} value={lang.code}>
                 {lang.label}
@@ -35,22 +48,25 @@ export default function LyricsPanel({
         </label>
       </div>
 
-      <div className="lyrics-panel__list">
+      {translationError && <p className="lyrics-panel__translation-error">{translationError}</p>}
+
+      <div className="lyrics-panel__list" ref={listRef}>
         {song.lines.map((line, index) => {
           const isActive = index === activeIndex;
           const translated =
-            language === song.originalLanguage
-              ? null
-              : line.translations?.[language];
+            language !== originalLanguageOption.code ? translatedLines?.[index] : null;
 
           return (
             <div
-              key={line.start}
+              key={`${line.start ?? "x"}-${index}`}
+              ref={isActive ? activeLineRef : null}
               className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
             >
               <p className="lyrics-line__original">{line.text}</p>
-              {translated && (
-                <p className="lyrics-line__translated">{translated}</p>
+              {language !== originalLanguageOption.code && (
+                <p className="lyrics-line__translated">
+                  {translated ?? (translationLoading ? "…" : "")}
+                </p>
               )}
             </div>
           );
@@ -63,9 +79,9 @@ export default function LyricsPanel({
 function getActiveLineIndex(lines, currentTime) {
   let active = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].start <= currentTime) {
+    if (lines[i].start !== null && lines[i].start <= currentTime) {
       active = i;
-    } else {
+    } else if (lines[i].start !== null) {
       break;
     }
   }
