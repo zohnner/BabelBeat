@@ -45,12 +45,11 @@ export async function onRequestGet({ request }) {
 
 function guessTrackArtist(title, author) {
   const clean = (title || "")
-    .replace(/\(official.*?\)/gi, "")
-    .replace(/\[official.*?\]/gi, "")
-    .replace(/\(lyrics?.*?\)/gi, "")
-    .replace(/\[lyrics?.*?\]/gi, "")
-    .replace(/\(audio\)/gi, "")
-    .replace(/\(music video\)/gi, "")
+    // Strip any parenthesized/bracketed qualifier entirely — video titles
+    // pack all kinds of tags in there (Official Video, 4K Remaster, Lyrics,
+    // HD, Audio, Clean, etc.) and none of them belong in a lyrics search.
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
     .replace(/official (music )?video/gi, "")
     .replace(/lyrics?( video)?/gi, "")
     .replace(/\s{2,}/g, " ")
