@@ -1,4 +1,4 @@
-// POST /api/translate  { lines: string[], target: "es", source?: "en" }
+// POST /api/translate  { lines: string[], target: "es", source?: "en", romanize?: boolean }
 // Proxies Google Translate's public (unofficial, key-free) endpoint —
 // the same one used by countless browser extensions and CLI tools — so
 // the frontend never has to talk to a third-party API directly.
@@ -8,6 +8,11 @@
 // the platform — so unrelated traffic exhausted our daily limit almost
 // immediately. Google's `translate_a/single` endpoint has no such shared
 // per-IP bottleneck at our volume and needs no account, key, or email.
+//
+// When `romanize` is true we also request Google's `dt=rm` output, which
+// gives a Latin-alphabet transliteration for non-Latin scripts (Japanese,
+// Korean, Chinese, Russian, Arabic, Hindi, ...) — used to power the
+// pronunciation line in the UI.
 
 const CONCURRENCY = 8;
 const MAX_CHARS_PER_LINE = 1800;
@@ -20,7 +25,7 @@ export async function onRequestPost({ request }) {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  const { lines, target, source = "en" } = body || {};
+  const { lines, target, source = "en", romanize = false } = body || {};
 
   if (!Array.isArray(lines) || lines.length === 0) {
     return json({ error: "Missing lines array" }, 400);
@@ -30,12 +35,14 @@ export async function onRequestPost({ request }) {
   }
 
   try {
-    const results = await translateInBatches(lines, source, target);
+    const results = await translateInBatches(lines, source, target, romanize);
     const translations = results.map((r) => r.text);
+    const romanizations = romanize ? results.map((r) => r.romanized || null) : undefined;
     const anyFailed = results.some((r) => !r.ok);
 
     return json({
       translations,
+      romanizations,
       warning: anyFailed ? "Some lines could not be translated." : undefined,
     });
   } catch (err) {
@@ -43,14 +50,14 @@ export async function onRequestPost({ request }) {
   }
 }
 
-async function translateInBatches(lines, source, target) {
+async function translateInBatches(lines, source, target, romanize) {
   const results = new Array(lines.length);
   let cursor = 0;
 
   async function worker() {
     while (cursor < lines.length) {
       const i = cursor++;
-      results[i] = await translateLine(lines[i], source, target);
+      results[i] = await translateLine(lines[i], source, target, romanize);
     }
   }
 
@@ -59,8 +66,8 @@ async function translateInBatches(lines, source, target) {
   return results;
 }
 
-async function translateLine(text, source, target) {
-  if (!text || !text.trim()) return { text: "", ok: true };
+async function translateLine(text, source, target, romanize) {
+  if (!text || !text.trim()) return { text: "", ok: true, romanized: "" };
 
   const params = new URLSearchParams({
     client: "gtx",
@@ -69,6 +76,7 @@ async function translateLine(text, source, target) {
     dt: "t",
     q: text.slice(0, MAX_CHARS_PER_LINE),
   });
+  if (romanize) params.append("dt", "rm");
 
   try {
     const res = await fetch(`https://translate.googleapis.com/translate_a/single?${params.toString()}`, {
@@ -77,12 +85,19 @@ async function translateLine(text, source, target) {
     if (!res.ok) return { text, ok: false };
 
     const data = await res.json();
-    // Response shape: [[[translatedChunk, originalChunk, ...], ...], ...]
+    // Response shape: [[[translatedChunk, originalChunk, ...], ...], ...,
+    //   [null, null, romanizedChunk] or [[null, null, romanizedChunk], ...] when dt=rm]
     const segments = Array.isArray(data?.[0]) ? data[0] : null;
     const translated = segments?.map((seg) => seg?.[0] ?? "").join("");
 
+    let romanized = "";
+    if (romanize && Array.isArray(data?.[1])) {
+      const romSegments = Array.isArray(data[1][0]) ? data[1] : [data[1]];
+      romanized = romSegments.map((seg) => seg?.[2] ?? "").join(" ").trim();
+    }
+
     if (!translated) return { text, ok: false };
-    return { text: translated, ok: true };
+    return { text: translated, ok: true, romanized };
   } catch {
     return { text, ok: false };
   }

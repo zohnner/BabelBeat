@@ -7,11 +7,9 @@
   display: flex;
   flex-direction: column;
   color: var(--text);
-  background:
-    var(--bg-glow),
-    radial-gradient(40% 35% at 90% 10%, rgba(79, 124, 255, 0.1), transparent 60%),
-    var(--bg);
+  background: var(--bg-glow), var(--bg-glow-2), var(--bg);
   background-attachment: fixed;
+  transition: background 600ms var(--ease);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -611,4 +609,235 @@
 
 .app__footer p {
   margin: 0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Karaoke word highlight + click-to-seek                                 */
+/* ---------------------------------------------------------------------- */
+
+.lyrics-line--clickable {
+  cursor: pointer;
+}
+
+.lyrics-line--clickable:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.lyrics-line--active.lyrics-line--clickable:hover {
+  background: linear-gradient(90deg, var(--accent-soft), transparent 80%);
+}
+
+.lyrics-line__word {
+  color: var(--text-secondary);
+  transition: color 260ms var(--ease);
+}
+
+.lyrics-line--active .lyrics-line__word--sung {
+  color: var(--text);
+  text-shadow: 0 0 18px rgba(var(--accent-1-rgb), 0.35);
+}
+
+.lyrics-line--active .lyrics-line__word--current {
+  color: var(--accent-2);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Pronunciation line + toggle                                            */
+/* ---------------------------------------------------------------------- */
+
+.lyrics-line__romanized {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+}
+
+.lyrics-panel__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.lyrics-panel__pronounce-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 150ms var(--ease), color 150ms var(--ease), background 150ms var(--ease);
+  white-space: nowrap;
+}
+
+.lyrics-panel__pronounce-toggle:hover {
+  border-color: rgba(var(--accent-1-rgb), 0.4);
+  color: var(--text);
+}
+
+.lyrics-panel__pronounce-toggle--on {
+  background: var(--accent-soft);
+  border-color: rgba(var(--accent-1-rgb), 0.5);
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Share button + card modal                                              */
+/* ---------------------------------------------------------------------- */
+
+.lyrics-line {
+  padding-right: 2.4rem;
+}
+
+.lyrics-line__share {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text-tertiary);
+  opacity: 0;
+  transform: translateY(-2px);
+  cursor: pointer;
+  transition: opacity 150ms var(--ease), transform 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease);
+}
+
+.lyrics-line__share svg {
+  width: 14px;
+  height: 14px;
+}
+
+.lyrics-line:hover .lyrics-line__share,
+.lyrics-line:focus-within .lyrics-line__share {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.lyrics-line__share:hover {
+  color: var(--text);
+  border-color: rgba(var(--accent-1-rgb), 0.5);
+}
+
+.share-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(4, 4, 8, 0.72);
+  backdrop-filter: blur(6px);
+  animation: fade-in 160ms var(--ease);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.share-modal__card {
+  width: min(560px, 100%);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.share-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.share-modal__header h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.share-modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 150ms var(--ease), border-color 150ms var(--ease);
+}
+
+.share-modal__close:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.share-modal__canvas-wrap {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  line-height: 0;
+}
+
+.share-modal__canvas-wrap canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.share-modal__actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.share-modal__actions button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: transform 150ms var(--ease), opacity 150ms var(--ease);
+}
+
+.share-modal__actions button:hover {
+  transform: translateY(-1px);
+}
+
+.share-modal__download {
+  background: var(--accent-gradient);
+  color: white;
+}
+
+.share-modal__cancel {
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  border: 1px solid var(--border) !important;
 }

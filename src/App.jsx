@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import YouTubePlayer from "./components/YouTubePlayer";
 import LyricsPanel from "./components/LyricsPanel";
 import LyricsSearchForm from "./components/LyricsSearchForm";
+import ShareCard from "./components/ShareCard";
 import { exampleVideoUrl } from "./data/mockLyrics";
-import { originalLanguageOption } from "./data/languages";
+import { originalLanguageOption, isRomanizable } from "./data/languages";
 import { extractVideoId } from "./utils/youtube";
-import { fetchVideoInfo, searchLyrics, translateLines } from "./utils/api";
+import { fetchVideoInfo, searchLyrics, translateLines, thumbnailProxyUrl } from "./utils/api";
+import { extractAccentColors } from "./utils/color";
 import "./App.css";
 
 export default function App() {
@@ -13,6 +15,7 @@ export default function App() {
   const [videoId, setVideoId] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [urlError, setUrlError] = useState(null);
+  const playerRef = useRef(null);
 
   const [videoInfo, setVideoInfo] = useState(null);
   const [loadingVideoInfo, setLoadingVideoInfo] = useState(false);
@@ -24,8 +27,28 @@ export default function App() {
 
   const [language, setLanguage] = useState(originalLanguageOption.code);
   const [translationsCache, setTranslationsCache] = useState({}); // { [songId]: { [lang]: string[] } }
+  const [romanizationsCache, setRomanizationsCache] = useState({}); // { [songId]: { [lang]: string[] } }
+  const [showPronunciation, setShowPronunciation] = useState(false);
   const [translationLoading, setTranslationLoading] = useState(false);
   const [translationError, setTranslationError] = useState(null);
+
+  const [themeColors, setThemeColors] = useState(null);
+  const [shareLine, setShareLine] = useState(null);
+
+  // Re-theme the whole app around each song's thumbnail once we have one.
+  useEffect(() => {
+    let cancelled = false;
+    if (!videoInfo?.thumbnail) {
+      setThemeColors(null);
+      return;
+    }
+    extractAccentColors(thumbnailProxyUrl(videoInfo.thumbnail)).then((colors) => {
+      if (!cancelled) setThemeColors(colors);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [videoInfo?.thumbnail]);
 
   async function handleLoadVideo(e) {
     e.preventDefault();
@@ -43,6 +66,8 @@ export default function App() {
     setSelectedSong(null);
     setLanguage(originalLanguageOption.code);
     setTranslationsCache({});
+    setRomanizationsCache({});
+    setShowPronunciation(false);
     setTranslationError(null);
     setLyricsError(null);
 
@@ -81,28 +106,47 @@ export default function App() {
   function handleSelectCandidate(candidate) {
     setSelectedSong(toSong(candidate));
     setLanguage(originalLanguageOption.code);
+    setShowPronunciation(false);
     setTranslationError(null);
+  }
+
+  function handleSeek(seconds) {
+    if (typeof playerRef.current?.seekTo === "function") {
+      playerRef.current.seekTo(seconds, true);
+      playerRef.current.playVideo?.();
+    }
   }
 
   async function handleLanguageChange(lang) {
     setLanguage(lang);
     setTranslationError(null);
+    setShowPronunciation(false);
 
     if (lang === originalLanguageOption.code || !selectedSong) return;
 
-    const cached = translationsCache[selectedSong.id]?.[lang];
-    if (cached) return;
+    const romanize = isRomanizable(lang);
+    const cachedTranslation = translationsCache[selectedSong.id]?.[lang];
+    const cachedRomanization = romanizationsCache[selectedSong.id]?.[lang];
+    if (cachedTranslation && (!romanize || cachedRomanization)) return;
 
     setTranslationLoading(true);
     try {
-      const { translations, warning } = await translateLines(
+      const { translations, romanizations, warning } = await translateLines(
         selectedSong.lines.map((l) => l.text),
         lang,
+        "en",
+        { romanize },
       );
       setTranslationsCache((prev) => ({
         ...prev,
         [selectedSong.id]: { ...(prev[selectedSong.id] || {}), [lang]: translations },
       }));
+      if (romanize && romanizations) {
+        setRomanizationsCache((prev) => ({
+          ...prev,
+          [selectedSong.id]: { ...(prev[selectedSong.id] || {}), [lang]: romanizations },
+        }));
+      }
       if (warning) setTranslationError(warning);
     } catch (err) {
       setTranslationError(err.message || "Translation failed.");
@@ -111,13 +155,37 @@ export default function App() {
     }
   }
 
+  function handleShareLine({ line, translated, romanized }) {
+    if (!selectedSong) return;
+    setShareLine({
+      original: line.text,
+      translated: translated || null,
+      romanized: romanized || null,
+      songTitle: selectedSong.title,
+      artist: selectedSong.artist,
+    });
+  }
+
   const translatedLines =
     selectedSong && language !== originalLanguageOption.code
       ? translationsCache[selectedSong.id]?.[language]
       : null;
+  const romanizations =
+    selectedSong && language !== originalLanguageOption.code
+      ? romanizationsCache[selectedSong.id]?.[language]
+      : null;
+
+  const themeStyle = themeColors
+    ? {
+        "--accent-1": `rgb(${themeColors.accent1.join(",")})`,
+        "--accent-2": `rgb(${themeColors.accent2.join(",")})`,
+        "--accent-1-rgb": themeColors.accent1.join(","),
+        "--accent-2-rgb": themeColors.accent2.join(","),
+      }
+    : undefined;
 
   return (
-    <div className="app">
+    <div className="app" style={themeStyle}>
       <header className="app__header">
         <div className="app__brand">
           <span className="app__brand-mark">
@@ -157,7 +225,13 @@ export default function App() {
       <main className="app__main">
         <div className="app__player-column">
           {videoId ? (
-            <YouTubePlayer videoId={videoId} onTimeUpdate={setCurrentTime} />
+            <YouTubePlayer
+              videoId={videoId}
+              onTimeUpdate={setCurrentTime}
+              onReady={(player) => {
+                playerRef.current = player;
+              }}
+            />
           ) : (
             <div className="app__player-placeholder">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -180,6 +254,11 @@ export default function App() {
                 translatedLines={translatedLines}
                 translationLoading={translationLoading}
                 translationError={translationError}
+                romanizations={romanizations}
+                showPronunciation={showPronunciation}
+                onTogglePronunciation={() => setShowPronunciation((v) => !v)}
+                onSeek={handleSeek}
+                onShareLine={handleShareLine}
               />
               {candidates && candidates.length > 1 && (
                 <details className="app__other-matches">
@@ -230,6 +309,10 @@ export default function App() {
       <footer className="app__footer">
         <p>Lyrics via lrclib.net · translations via Google Translate</p>
       </footer>
+
+      {shareLine && (
+        <ShareCard data={shareLine} accentColors={themeColors} onClose={() => setShareLine(null)} />
+      )}
     </div>
   );
 }
